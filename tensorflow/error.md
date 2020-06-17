@@ -30,13 +30,19 @@ tf.compat.v1.disable_eager_execution()
 * 通过偏置项，可以让模型在训练的过程中，动态地调整分类器以画出最佳的决策面
 '''
 ```
-
+#### 调整学习率提高准确率
+```python
+# 在测试中将学习率从0.01上调到0.1,测试集的正确率达到了0.9
+# 相比之前的正确率0.86有所上升
+```
 ### 参考文献
 ```python
 # 参考代码
 url = 'https://www.cnblogs.com/HuangYJ/p/11642475.html'
 # 数据集
 url = 'http://yann.lecun.com/exdb/mnist/'
-# tensorflow官方文档
+# tensorflow官网官方文档
 url = 'https://www.tensorflow.org/'
+# tensorflow非官方文档中文版
+url ='https://www.w3cschool.cn/tensorflow_python/tensorflow_python-bm7y28si.html'
 ``` 
