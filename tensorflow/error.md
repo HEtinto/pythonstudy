@@ -46,3 +46,33 @@ url = 'https://www.tensorflow.org/'
 # tensorflow非官方文档中文版
 url ='https://www.w3cschool.cn/tensorflow_python/tensorflow_python-bm7y28si.html'
 ``` 
+### 将.gz数据集转化为csv格式的数据集
+```python
+# 注意MNIST数据集的路径，在此代码下，MNSIT数据集应该位于同一级目录
+# 注意要将当前目录下得MNIST数据集解压，然后再执行下述代码
+def convert(imgf, labelf, outf, n):
+    f = open(imgf, "rb")
+    o = open(outf, "w")
+    l = open(labelf, "rb")
+
+    f.read(16)
+    l.read(8)
+    images = []
+
+    for i in range(n):
+        image = [ord(l.read(1))]
+        for j in range(28*28):
+            image.append(ord(f.read(1)))
+        images.append(image)
+
+    for image in images:
+        o.write(",".join(str(pix) for pix in image)+"\n")
+    f.close()
+    o.close()
+    l.close()
+
+convert("train-images-idx3-ubyte", "train-labels-idx1-ubyte",
+        "mnist_train.csv", 60000)
+convert("t10k-images-idx3-ubyte", "t10k-labels-idx1-ubyte",
+        "mnist_test.csv", 10000)
+```
