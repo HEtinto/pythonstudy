@@ -23,30 +23,20 @@ x = tf.compat.v1.placeholder(tf.float32, [None, 784], name="X")
 # 在前面加上代码
 tf.compat.v1.disable_eager_execution()
 ```
-#### 初始化偏置b的原因
+#### 4.初始化偏置b的原因
 ```
 '''
 * 对于分类器而言，如果不加上偏置项b，那么我们的分类器只能过原点
 * 通过偏置项，可以让模型在训练的过程中，动态地调整分类器以画出最佳的决策面
 '''
 ```
-#### 调整学习率提高准确率
+#### 5.调整学习率提高准确率
 ```python
 # 在测试中将学习率从0.01上调到0.1,测试集的正确率达到了0.9
 # 相比之前的正确率0.86有所上升
 ```
-### 参考文献
-```python
-# 参考代码
-url = 'https://www.cnblogs.com/HuangYJ/p/11642475.html'
-# 数据集
-url = 'http://yann.lecun.com/exdb/mnist/'
-# tensorflow官网官方文档
-url = 'https://www.tensorflow.org/'
-# tensorflow非官方文档中文版
-url ='https://www.w3cschool.cn/tensorflow_python/tensorflow_python-bm7y28si.html'
-``` 
-### 将.gz数据集转化为csv格式的数据集
+
+#### 6.将.gz数据集转化为csv格式的数据集
 ```python
 # 注意MNIST数据集的路径，在此代码下，MNSIT数据集应该位于同一级目录
 # 注意要将当前目录下得MNIST数据集解压，然后再执行下述代码
@@ -75,4 +65,16 @@ convert("train-images-idx3-ubyte", "train-labels-idx1-ubyte",
         "mnist_train.csv", 60000)
 convert("t10k-images-idx3-ubyte", "t10k-labels-idx1-ubyte",
         "mnist_test.csv", 10000)
-```
+``` 
+
+### 参考文献
+```python
+# 参考代码
+url = 'https://www.cnblogs.com/HuangYJ/p/11642475.html'
+# 数据集
+url = 'http://yann.lecun.com/exdb/mnist/'
+# tensorflow官网官方文档
+url = 'https://www.tensorflow.org/'
+# tensorflow非官方文档中文版
+url ='https://www.w3cschool.cn/tensorflow_python/tensorflow_python-bm7y28si.html'
+``` 
