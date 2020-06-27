@@ -6,6 +6,7 @@ import os
 import numpy as np
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
+from save import *
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)  # 设定输出日志的模式
 
@@ -115,7 +116,8 @@ def main(args):
     # 启动训练
     mnist_classifier.train(
         input_fn=train_input_fn,
-        steps=20000,
+        # steps=20000,
+        steps=10,
         hooks=[logging_hook])
 
     # 评价喂食函数
@@ -130,6 +132,25 @@ def main(args):
     print(eval_results)
 
 
+# step2 创建模型
+def create_model():
+    return tf.keras.models.Sequential([
+        tf.keras.layers.Flatten(input_shape=(28, 28)),
+        tf.keras.layers.Dense(512, activation='relu'),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(10, activation='softmax')
+    ])
+
+
 # 这个文件能够直接运行，也可以作为模块被其他文件载入
 if __name__ == "__main__":
     tf.compat.v1.app.run()
+    # 创建一个新的模型实例
+    model = create_model()
+
+    # 训练模型
+    model.fit(train_images, train_labels, epochs=5)
+
+    # 将整个模型保存为HDF5文件
+    model.save('my_model.h5')
+
