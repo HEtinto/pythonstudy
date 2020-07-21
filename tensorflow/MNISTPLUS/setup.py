@@ -8,6 +8,8 @@ import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 from save import *
 
+physical_devices = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)  # 设定输出日志的模式
 
 
@@ -116,8 +118,8 @@ def main(args):
     # 启动训练
     mnist_classifier.train(
         input_fn=train_input_fn,
-        # steps=20000,
-        steps=10,
+        steps=20000,
+        # steps=10,
         hooks=[logging_hook])
 
     # 评价喂食函数
