@@ -1,4 +1,4 @@
-import tensorflow.examples.tutorials.mnist.input_data as input_data
+import tensorflow_core.examples.tutorials.mnist.input_data as input_data
 import tensorflow as tf
 import matplotlib.pyplot as plt
 

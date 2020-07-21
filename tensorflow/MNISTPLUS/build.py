@@ -1,156 +1,100 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Dec  5 10:39:19 2019
 
-import os
-import numpy as np
+@author: dell
+"""
+
 import tensorflow as tf
-from tensorflow.examples.tutorials.mnist import input_data
-from save import *
+try:
+    import tensorflow.python.keras as keras
+except:
+    import tensorflow.keras as keras
+from tensorflow.python.keras import layers
 
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)  # 设定输出日志的模式
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D, MaxPool2D
+from tensorflow.keras.utils import to_categorical
 
+mnist = keras.datasets.mnist
+(x_train,y_train),(x_test,y_test) = mnist.load_data()
+#x_train, x_test = x_train/255.0, x_test/255.0  # 除以 255 是为了归一化。
 
-# 我们的程序代码将放在这里
-def cnn_model_fn(features, labels, mode):
-    # 输入层，-1表示自动计算，这里是图片批次大小，宽高各28，最后1表示颜色单色
-    input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
+X_train4D = x_train.reshape(x_train.shape[0], 28, 28, 1).astype('float32')
+X_test4D = x_test.reshape(x_test.shape[0], 28, 28, 1).astype('float32')
 
-    # 1号卷积层，过滤32次，核心区域5x5，激活函数relu
-    conv1 = tf.compat.v1.layers.conv2d(
-        inputs=input_layer,  # 接收上面创建的输入层输出的张量
-        filters=32,
-        kernel_size=[5, 5],
-        padding="same",
-        activation=tf.nn.relu)
+X_train4D_Normalize = X_train4D / 255 # 归一化
+X_test4D_Normalize = X_test4D / 255
 
-    # 1号池化层，接收1号卷积层输出的张量
-    pool1 = tf.compat.v1.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
+y_trainOnehot = to_categorical(y_train)
+y_testOnehot = to_categorical(y_test)
+# Sequential 用于建立序列模型
+# Flatten 层用于展开张量，input_shape 定义输入形状为 28x28 的图像，展开后为 28*28 的张量。
+# Dense 层为全连接层，输出有 128 个神经元，激活函数使用 relu。
+# Dropout 层使用 0.2 的失活率。
+# 再接一个全连接层，激活函数使用 softmax，得到对各个类别预测的概率。
+#model = keras.Sequential()
+#model.add(layers.Flatten(input_shape=(28,28)))
+#model.add(layers.Dense(128,activation="relu"))
+#model.add(layers.Dropout(0.2))
+#model.add(layers.Dense(10,activation="softmax"))
 
-    # 2号卷积层
-    conv2 = tf.compat.v1.layers.conv2d(
-        inputs=pool1,  # 继续1号池化层的输出
-        filters=64,
-        kernel_size=[5, 5],
-        padding="same",
-        activation=tf.nn.relu)
+model = Sequential()
 
-    # 2号池化层
-    pool2 = tf.compat.v1.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
+# 一层卷积
+model.add(
+    Conv2D(
+        filters=16,
+        kernel_size=(5, 5),
+        padding='same',  # 保证卷积核大小，不够补零
+        input_shape=(28, 28, 1),
+        activation='relu'))
+# 池化层1
+model.add(MaxPool2D(pool_size=(2, 2)))
+model.add(Dropout(0.25))
 
-    # 对2号池化层的输入变换张量形状
-    pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
+# 二层卷积
+model.add(
+    Conv2D(filters=32, kernel_size=(5, 5), padding='same', activation='relu'))
+# 池化层2
+model.add(MaxPool2D(pool_size=(2, 2)))
+model.add(Dropout(0.25))
 
-    # 密度层
-    dense = tf.compat.v1.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+model.add(
+    Conv2D(filters=64, kernel_size=(5, 5), padding='same', activation='relu'))
+model.add(
+    Conv2D(filters=128, kernel_size=(5, 5), padding='same', activation='relu'))
+model.add(MaxPool2D(pool_size=(2, 2)))
+model.add(Dropout(0.25))
 
-    # 丢弃层进行简化
-    dropout = tf.compat.v1.layers.dropout(
-        inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
+model.add(Flatten())  # 平坦层
+model.add(Dense(128, activation='relu'))  # 全连接层
+model.add(Dropout(0.25))
+model.add(Dense(10, activation='softmax')) # 激活函数
 
-    # 使用密度层作为最终输出，unit可能的分类数量
-    logits = tf.compat.v1.layers.dense(inputs=dropout, units=10)
+# 优化器选择 Adam 优化器。
+# 损失函数使用 sparse_categorical_crossentropy，
+# 还有一个损失函数是 categorical_crossentropy，两者的区别在于输入的真实标签的形式，
+# sparse_categorical 输入的是整形的标签，例如 [1, 2, 3, 4]，categorical 输入的是 one-hot 编码的标签。
+#model.compile(optimizer="adam",
+ #             loss="sparse_categorical_crossentropy",
+  #            metrics=['accuracy'])
 
-    # 预测和评价使用的输出数据内容
-    predictions = {
-        # 产生预测，argmax输出第一个轴向的最大数值
-        "classes": tf.argmax(input=logits, axis=1),
-        # 输出可能性
-        "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
-    }
-
-    # 以下是根据mode切换的三个不同的方法，都返回tf.estimator.EstimatorSpec对象
-
-    # 预测
-    if mode == tf.estimator.ModeKeys.PREDICT:
-        return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
-
-    # 损失函数(训练与评价使用)，稀疏柔性最大值交叉熵
-    loss = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
-
-    # 训练，使用梯度下降优化器，
-    if mode == tf.compat.v1.estimator.ModeKeys.TRAIN:
-        optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate=0.001)
-        train_op = optimizer.minimize(
-            loss=loss,
-            global_step=tf.compat.v1.train.get_global_step())
-        return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
-
-    # 评价函数（上面两个mode之外else）添加评价度量(for EVAL mode)
-    eval_metric_ops = {
-        "accuracy": tf.compat.v1.metrics.accuracy(
-            labels=labels, predictions=predictions["classes"])}
-    return tf.estimator.EstimatorSpec(
-        mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
-
-
-dir_path = os.path.dirname(os.path.realpath(__file__))
-data_path = os.path.join(dir_path, 'MNIST_data')
-
-
-def main(args):
-    # 载入训练和测试数据
-    mnist = input_data.read_data_sets(data_path)
-    train_data = mnist.train.images  # 得到np.array
-    train_labels = np.asarray(mnist.train.labels, dtype=np.int32)
-    eval_data = mnist.test.images  # 得到np.array
-    eval_labels = np.asarray(mnist.test.labels, dtype=np.int32)
-
-    # 创建估算器
-    mnist_classifier = tf.estimator.Estimator(
-        model_fn=cnn_model_fn, model_dir="/tmp/mnist_convnet_model")
-
-    # 设置输出预测的日志
-    tensors_to_log = {"probabilities": "softmax_tensor"}
-    logging_hook = tf.compat.v1.train.LoggingTensorHook(
-        tensors=tensors_to_log, every_n_iter=50)
-
-    # 训练喂食函数
-    train_input_fn = tf.compat.v1.estimator.inputs.numpy_input_fn(
-        x={"x": train_data},
-        y=train_labels,
-        batch_size=100,
-        num_epochs=None,
-        shuffle=True)
-
-    # 启动训练
-    mnist_classifier.train(
-        input_fn=train_input_fn,
-        # steps=20000,
-        steps=10,
-        hooks=[logging_hook])
-
-    # 评价喂食函数
-    eval_input_fn = tf.compat.v1.estimator.inputs.numpy_input_fn(
-        x={"x": eval_data},
-        y=eval_labels,
-        num_epochs=1,
-        shuffle=False)
-
-    # 启动评价并输出结果
-    eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
-    print(eval_results)
+# 训练模型
+model.compile(loss='categorical_crossentropy',
+              optimizer='adam',
+              metrics=['accuracy'])
+train_history = model.fit(x=X_train4D_Normalize,
+                          y=y_trainOnehot,
+                          validation_split=0.2,
+                          batch_size=300,
+                          epochs=10,
+                          verbose=2)
 
 
-# step2 创建模型
-def create_model():
-    return tf.keras.models.Sequential([
-        tf.keras.layers.Flatten(input_shape=(28, 28)),
-        tf.keras.layers.Dense(512, activation='relu'),
-        tf.keras.layers.Dropout(0.2),
-        tf.keras.layers.Dense(10, activation='softmax')
-    ])
-
-
-# 这个文件能够直接运行，也可以作为模块被其他文件载入
-if __name__ == "__main__":
-    tf.compat.v1.app.run()
-    # 创建一个新的模型实例
-    model = create_model()
-
-    # 训练模型
-    model.fit(train_images, train_labels, epochs=5)
-
-    # 将整个模型保存为HDF5文件
-    model.save('my_model.h5')
-
+# fit 用于训练模型，对训练数据遍历一次为一个 epoch，这里遍历 5 次。
+# evaluate 用于评估模型，返回的数值分别是损失和指标。
+# model.fit(x_train,y_train,epochs=10)
+# 将整个模型保存为HDF5文件
+model.save('C:/Users/Y2469/Desktop/pythonstudy/tensorflow/MNISTPLUS/model/my_model.h5')
+model.evaluate(X_test4D_Normalize, y_testOnehot)

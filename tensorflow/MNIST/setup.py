@@ -1,11 +1,11 @@
 # 在不同的环境中引用库的方式可能不同
-from MNIST.mnsit import *
-from MNIST.plot import *
-"""
+# from MNIST.mnsit import *
+# from MNIST.plot import *
+
 # 用于在控制台中运行
 from mnsit import *
 from plot import *
-"""
+
 for epoch in range(train_epochs):
     for batch in range(total_batch):
         xs, ys = mnist.train.next_batch(batch_size)  # 读取批次数据

@@ -1,128 +1,155 @@
-from MNISTPLUS.classNetwork import *
-# from MNISTPLUS.plot import *
-# from plot import *
-# from setup import *
-# number of input,hidden and output nodes
-# 28 * 28 = 784
-input_nodes = 784
-hidden_nodes = 200
-output_nodes = 10
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
-# learning rate is 0.3
-learning_rate = 0.1
+import os
+import numpy as np
+import tensorflow as tf
+from tensorflow.examples.tutorials.mnist import input_data
+from save import *
 
-# create instance of neural network
-n = neuralNetwork(input_nodes, hidden_nodes, output_nodes, learning_rate)
-
-# train the neural network
-
-# load the mnist training data csv file into a list
-training_data_file = open("MNIST_data/mnist_train.csv", 'r')
-training_data_list = training_data_file.readlines()
-training_data_file.close()
-
-# epochs is the number of times the training data set is used for training
-epochs = 5
-for e in range(epochs):
-    # go through all records in the training data set
-    for record in training_data_list:
-        all_values = record.split(',')
-        # scale and shift the inputs
-        inputs = (numpy.asfarray(all_values[1:]) / 255.0 * 0.99) + 0.01
-        # create the target output values (all 0.01, except the desired label which is 0.99)
-        targets = numpy.zeros(output_nodes) + 0.01
-        # all_values[0] is the target label for this record
-        targets[int(all_values[0])] = 0.99
-        n.train(inputs, targets)
-        pass
-    pass
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)  # 设定输出日志的模式
 
 
-# test the neural network
+# 我们的程序代码将放在这里
+def cnn_model_fn(features, labels, mode):
+    # 输入层，-1表示自动计算，这里是图片批次大小，宽高各28，最后1表示颜色单色
+    input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
 
-# load the mnist test data csv file to a list
-test_data_file = open("MNIST_data/mnist_test.csv", 'r')
-test_data_list = test_data_file.readlines()
-test_data_file.close()
+    # 1号卷积层，过滤32次，核心区域5x5，激活函数relu
+    conv1 = tf.compat.v1.layers.conv2d(
+        inputs=input_layer,  # 接收上面创建的输入层输出的张量
+        filters=32,
+        kernel_size=[5, 5],
+        padding="same",
+        activation=tf.nn.relu)
 
-# scorecard for how well the network performs,initially empty
-scorecard = []
-# go through all records in the test data set
-for record in test_data_list:
-    all_values = record.split(',')
-    # correct answer is first value
-    correct_label = int(all_values[0])
-    # scale and shift the inputs
-    inputs = (numpy.asfarray(all_values[1:]) / 255.0 * 0.99) + 0.01
-    # query the network
-    outputs = n.query(inputs)
-    # the index of the highest value corresponds to the label
-    label = numpy.argmax(outputs)
-    #    print("Answer label is:",correct_label," ; ",label," is network's answer")
-    # append correct or incorrect to list
-    if (label == correct_label):
-        # network's answer matches correct answer, add 1 to scorecard
-        scorecard.append(1)
-    else:
-        scorecard.append(0)
-    pass
+    # 1号池化层，接收1号卷积层输出的张量
+    pool1 = tf.compat.v1.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
 
-# calculate the performance score ,the fraction of correct answers
-scorecard_array = numpy.asarray(scorecard)
-print("performance = ", scorecard_array.sum() / scorecard_array.size)
+    # 2号卷积层
+    conv2 = tf.compat.v1.layers.conv2d(
+        inputs=pool1,  # 继续1号池化层的输出
+        filters=64,
+        kernel_size=[5, 5],
+        padding="same",
+        activation=tf.nn.relu)
 
-# 测试神经网络是否能准确识别自己的手绘28*28 png图像
+    # 2号池化层
+    pool2 = tf.compat.v1.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
 
-# our own image test data set
-our_own_dataset = []
+    # 对2号池化层的输入变换张量形状
+    pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
 
-# load the png image data as test data set
-for image_file_name in glob.glob('my_own_images/2828_my_own_?.png'):
-    # use the filename to set the correct label
-    label = int(image_file_name[-5:-4])
+    # 密度层
+    dense = tf.compat.v1.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
 
-    # load image data from png files into an array
-    print("loading ... ", image_file_name)
-    img_array = imageio.imread(image_file_name, as_gray=True)
+    # 丢弃层进行简化
+    dropout = tf.compat.v1.layers.dropout(
+        inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
 
-    # reshape from 28x28 to list of 784 values, invert values
-    img_data = 255.0 - img_array.reshape(784)
+    # 使用密度层作为最终输出，unit可能的分类数量
+    logits = tf.compat.v1.layers.dense(inputs=dropout, units=10)
 
-    # then scale data to range from 0.01 to 1.0
-    img_data = (img_data / 255.0 * 0.99) + 0.01
-    print(numpy.min(img_data))
-    print(numpy.max(img_data))
+    # 预测和评价使用的输出数据内容
+    predictions = {
+        # 产生预测，argmax输出第一个轴向的最大数值
+        "classes": tf.argmax(input=logits, axis=1),
+        # 输出可能性
+        "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
+    }
 
-    # append label and image data  to test data set
-    record = numpy.append(label, img_data)
-    our_own_dataset.append(record)
+    # 以下是根据mode切换的三个不同的方法，都返回tf.estimator.EstimatorSpec对象
 
-    pass
+    # 预测
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
+
+    # 损失函数(训练与评价使用)，稀疏柔性最大值交叉熵
+    loss = tf.compat.v1.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
+
+    # 训练，使用梯度下降优化器，
+    if mode == tf.compat.v1.estimator.ModeKeys.TRAIN:
+        optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate=0.001)
+        train_op = optimizer.minimize(
+            loss=loss,
+            global_step=tf.compat.v1.train.get_global_step())
+        return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
+
+    # 评价函数（上面两个mode之外else）添加评价度量(for EVAL mode)
+    eval_metric_ops = {
+        "accuracy": tf.compat.v1.metrics.accuracy(
+            labels=labels, predictions=predictions["classes"])}
+    return tf.estimator.EstimatorSpec(
+        mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
 
-# test the neural network with our own images
+dir_path = os.path.dirname(os.path.realpath(__file__))
+data_path = os.path.join(dir_path, 'MNIST_data')
 
-# record to test
-item = 2
 
-# plot image
-matplotlib.pyplot.imshow(our_own_dataset[item][1:].reshape(28, 28), cmap='Greys', interpolation='None')
+def main(args):
+    # 载入训练和测试数据
+    mnist = input_data.read_data_sets(data_path)
+    train_data = mnist.train.images  # 得到np.array
+    train_labels = np.asarray(mnist.train.labels, dtype=np.int32)
+    eval_data = mnist.test.images  # 得到np.array
+    eval_labels = np.asarray(mnist.test.labels, dtype=np.int32)
 
-# correct answer is first value
-correct_label = our_own_dataset[item][0]
-# data is remaining values
-inputs = our_own_dataset[item][1:]
+    # 创建估算器
+    mnist_classifier = tf.estimator.Estimator(
+        model_fn=cnn_model_fn, model_dir="/tmp/mnist_convnet_model")
 
-# query the network
-outputs = n.query(inputs)
-print(outputs)
+    # 设置输出预测的日志
+    tensors_to_log = {"probabilities": "softmax_tensor"}
+    logging_hook = tf.compat.v1.train.LoggingTensorHook(
+        tensors=tensors_to_log, every_n_iter=50)
 
-# the index of the highest value corresponds to the label
-label = numpy.argmax(outputs)
-print("network says ", label)
-# append correct or incorrect to list
-if (label == correct_label):
-    print("Good,match!")
-else:
-    print("no match!")
-    pass
+    # 训练喂食函数
+    train_input_fn = tf.compat.v1.estimator.inputs.numpy_input_fn(
+        x={"x": train_data},
+        y=train_labels,
+        batch_size=100,
+        num_epochs=None,
+        shuffle=True)
+
+    # 启动训练
+    mnist_classifier.train(
+        input_fn=train_input_fn,
+        # steps=20000,
+        steps=10,
+        hooks=[logging_hook])
+
+    # 评价喂食函数
+    eval_input_fn = tf.compat.v1.estimator.inputs.numpy_input_fn(
+        x={"x": eval_data},
+        y=eval_labels,
+        num_epochs=1,
+        shuffle=False)
+
+    # 启动评价并输出结果
+    eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
+    print(eval_results)
+
+
+# step2 创建模型
+def create_model():
+    return tf.keras.models.Sequential([
+        tf.keras.layers.Flatten(input_shape=(28, 28)),
+        tf.keras.layers.Dense(512, activation='relu'),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(10, activation='softmax')
+    ])
+
+
+# 这个文件能够直接运行，也可以作为模块被其他文件载入
+if __name__ == "__main__":
+    tf.compat.v1.app.run()
+    # 创建一个新的模型实例
+    model = create_model()
+
+    # 训练模型
+    model.fit(train_images, train_labels, epochs=5)
+
+    # 将整个模型保存为HDF5文件
+    model.save('./my_model.h5')
